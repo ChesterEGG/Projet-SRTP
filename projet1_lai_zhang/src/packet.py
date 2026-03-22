@@ -1,5 +1,7 @@
 import struct
 import zlib
+from struct import unpack
+
 
 class Packet:
 
@@ -74,11 +76,86 @@ class Packet:
         else:
             return head_final
 
+    @staticmethod
+    def unpack(packet):
+        """
+        Unpack un packet STPR
+        :param data: Les bytes du packet
+        :return: Un objet Packet ou None si invalide
+        """
+
+        if (len(packet) < 12):
+            print("packet invalide (trop petit)")
+            return None
+
+        # Extration du header et crc1
+        line1, timestamp, crc1 = struct.unpack('!III', packet[0:12])
+        header = packet[0:8]
+
+        # Vérification du crc1
+        expected_crc1 = zlib.crc32(header) & 0xffffffff
+
+        if (crc1 != expected_crc1):
+            print("packet invalide (CRC1 incorrect)")
+            return None
+
+        # Analyse de la première ligne
+        line1_bin = format(line1, '032b')
+
+        type = int(line1_bin[0:2], 2)
+        window = int(line1_bin[2:8], 2)
+        length = int(line1_bin[8:21], 2)
+        seqnum = int(line1_bin[21:32], 2)
+
+        if type not in [1, 2, 3]:
+            print("packet invalide (type invalide)")
+            return None
+
+        if (window > 63):
+            print("packet invalide (window invalide)")
+            return None
+
+        if (length > 1024):
+            print("packet invalide (packet trop grand)")
+            return None
+
+        if seqnum > 2047:
+            print("packet invalide (seqnum invalide)")
+            return None
+
+        # Extraction des données
+        data = b''
+        if length > 0:
+            data = packet[12:12 + length]
+
+            # Vérification du crc2
+            if len(packet) < 12 + length + 4:
+                print("packet invalide (payload ou crc2 manquant)")
+                return None
+
+            crc2 = struct.unpack('!I', packet[12 + length: 16 + length])[0]
+            expected_crc2 = zlib.crc32(data) & 0xffffffff
+            if (crc2 != expected_crc2):
+                print("packet invalide (CRC2 invalide)")
+                return None
+
+        return Packet(type, window, seqnum, timestamp, data)
+
 
 #test
 
-pak1 = Packet(1, 0, 0, 0, b"")
+pak1 = Packet(1, 9, 67, 0, b"juste un teste")
+pak2 = Packet(1, 10, 133, 1, b'c est cense print 67')
+test_bytes = pak1.pack()
+test_bytes2 = pak2.pack()
+print(f"Taille du packet: {len(test_bytes)} octets")
+print(f"Hex du paquet : {test_bytes.hex()}")
+print(test_bytes)
 
-test = pak1.pack()
-print(len(test))
-print(test.hex())
+pak3 = Packet.unpack(test_bytes2)
+
+if pak3:
+    print(f"Unpack réussi ! Type: {pak3.type}, Seq: {pak3.seqnum}, Payload: {pak3.payload.decode()}")
+else:
+    print("Échec de l'unpack")
+
