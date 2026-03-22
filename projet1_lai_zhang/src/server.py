@@ -53,11 +53,11 @@ def start_server():
         sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         sock.bind((args.hostname, args.port))
     except socket.error as e:
-        print(f"Erreur : {e}",file=sys.stderr)
+        print(f"Erreur de socket : {e}",file=sys.stderr)
 
     # Reception des packet
     while True:
-        data, address = sock.recvfrom(1024)
+        data, address = sock.recvfrom(2048)
         packet = Packet.unpack(data)
 
         # Packet de type DATA
