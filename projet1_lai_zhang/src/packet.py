@@ -1,6 +1,5 @@
 import struct
 import zlib
-from struct import unpack
 
 
 class Packet:
@@ -141,18 +140,35 @@ class Packet:
 
         return Packet(type, window, seqnum, timestamp, data)
 
+    def __str__(self):
+        """
+        Affiche le paquet de façon lisible pour le debugging
+        Réalisé avec IA
+        """
+        p_type_name = {1: "DATA", 2: "ACK", 3: "SACK"}.get(self.type, "UNKNOWN")
+
+        # On prépare un résumé
+        res = f"--- [SRTP Packet {p_type_name}] ---\n"
+        res += f"Seqnum: {self.seqnum} | Window: {self.window}\n"
+        res += f"Payload Length: {len(self.payload)} bytes\n"
+        res += f"Timestamp: {self.timestamp}\n"
+
+        # On ajoute le HEX du paquet complet (très utile pour Wireshark)
+        packet_bytes = self.pack()
+        res += f"Raw Hex: {packet_bytes.hex()}\n"
+        res += "---------------------------"
+        return res
+
 
 #test
 
-pak1 = Packet(1, 9, 67, 0, b"juste un teste")
+pak1 = Packet(1, 9, 67, 0, b"juste un testes")
 pak2 = Packet(1, 10, 133, 1, b'c est cense print 67')
-test_bytes = pak1.pack()
-test_bytes2 = pak2.pack()
-print(f"Taille du packet: {len(test_bytes)} octets")
-print(f"Hex du paquet : {test_bytes.hex()}")
-print(test_bytes)
 
-pak3 = Packet.unpack(test_bytes2)
+
+print(pak1)
+
+pak3 = Packet.unpack(pak2.pack())
 
 if pak3:
     print(f"Unpack réussi ! Type: {pak3.type}, Seq: {pak3.seqnum}, Payload: {pak3.payload.decode()}")
