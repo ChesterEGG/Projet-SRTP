@@ -143,7 +143,7 @@ class Packet:
     def __str__(self):
         """
         Affiche le paquet de façon lisible pour le debugging
-        Réalisé avec IA
+        Cette fonction est faites par l'IA
         """
         p_type_name = {1: "DATA", 2: "ACK", 3: "SACK"}.get(self.type, "UNKNOWN")
 
