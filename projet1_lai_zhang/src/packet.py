@@ -95,6 +95,8 @@ class Packet:
         expected_crc1 = zlib.crc32(header) & 0xffffffff
 
         if (crc1 != expected_crc1):
+            print(crc1)
+            print(expected_crc1)
             print("packet invalide (CRC1 incorrect)")
             return None
 
