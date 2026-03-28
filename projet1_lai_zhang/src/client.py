@@ -39,7 +39,7 @@ def start_client():
     try:
         sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
     except socket.error as e:
-        print(f"Erreur de socket: {e}", file=sys.stderr)
+        print(f"Erreur d'init du socket: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Création du packet de requête

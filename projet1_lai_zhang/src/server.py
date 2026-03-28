@@ -30,8 +30,6 @@ def send_file(sock, client_address, filepath, window):
                 packets.append(Packet(1, window, seqnum, int(time.time()), chunk))
 
                 if not chunk:
-                    packet = Packet(1, window, seqnum, int(time.time()), payload=b'')
-                    sock.sendto(packet.pack(), client_address)
                     break
 
                 seqnum = (seqnum + 1) % 2048
@@ -39,10 +37,10 @@ def send_file(sock, client_address, filepath, window):
         print(f"Erreur de lecture de fichier: {e}", file=sys.stderr)
         return
 
-
-    last_ack = -1
-    last_sent = -1
-    timestamp = {}
+    # Variable de contrôle de la fenêtre glissante
+    last_ack = -1 # INdex du dernier paquet confirmé par le client
+    last_sent = -1 # Index du dernier paquet envoyé
+    timestamp = {} # Suivi du temps d'envoie {index dans liste: temps_unix}
 
 
     # On attend 100ms max pour un ACK
@@ -51,11 +49,11 @@ def send_file(sock, client_address, filepath, window):
     try:
         while last_ack < len(packets) -1:
             # Envoie tant que la fenêtre le permet
-            while last_sent - last_ack < window and last_sent < len(packets) - 1:
+            while (last_sent - last_ack) < window and (last_sent < len(packets) - 1):
                 last_sent += 1
                 packet = packets[last_sent]
                 sock.sendto(packet.pack(), client_address)
-                timestamp[packet.seqnum] = time.time()
+                timestamp[last_sent] = time.time()
                 print(f"Envoie du segment {packet.seqnum} (Index {last_sent})", file=sys.stderr)
 
 
@@ -64,20 +62,17 @@ def send_file(sock, client_address, filepath, window):
                 data, address = sock.recvfrom(2048)
                 ack_packet = Packet.unpack(data)
 
-                if ack_packet.type == 2: # ACK
-                    """
+                if ack_packet and ack_packet.type == 2:
                     ack_seqnum = ack_packet.seqnum
-                    next_expected = last_ack + 1
-                    if packets[next_expected].seqnum == ack_seqnum:
-                        last_ack = next_expected - 1
-                        print(f"ACK recu pour la séquence {ack_seqnum}", file=sys.stderr)
-                    elif (ack_seqnum > packets[next_expected].seqnum):
-                        last_ack = next_expected
-                    """
-                    target_idx = ack_packet.seqnum - 1
 
-                    if target_idx > last_ack:
-                        last_ack = target_idx
+                    base_cycle = (last_ack + 1) // 2048
+                    current_idx = (base_cycle * 2048) + ack_seqnum - 1
+
+                    if current_idx <= last_ack:
+                        current_idx += 2048
+
+                    if current_idx > last_ack and current_idx < len(packets):
+                        last_ack = current_idx
                         print(f"ACK recu : fenetre avance a l'idx {last_ack}", file=sys.stderr)
 
             except socket.timeout:
@@ -90,6 +85,7 @@ def send_file(sock, client_address, filepath, window):
 
             # Retransmission du message due au timeout
             now = time.time()
+            # Vérification des packet envoyés mais ACK pas reçu
             for i in range(last_ack + 1, last_sent + 1):
                 if i in timestamp and (now - timestamp[i] > 0.5):
                     print(f"Timeout, retransmission du seq {packets[i].seqnum}", file=sys.stderr)
@@ -125,7 +121,7 @@ def start_server():
         sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         sock.bind((args.hostname, args.port))
     except socket.error as e:
-        print(f"Erreur de socket : {e}",file=sys.stderr)
+        print(f"Erreur d'init du socket : {e}",file=sys.stderr)
         sys.exit(1)
 
     # Reception des packet
@@ -136,7 +132,7 @@ def start_server():
             packet = Packet.unpack(data)
 
             # Packet de type DATA
-            if packet.type == 1:
+            if packet and packet.type == 1:
                 try:
                     payload = packet.payload.decode('ascii').strip()
 
