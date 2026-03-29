@@ -62,18 +62,20 @@ def send_file(sock, client_address, filepath, window):
                 data, address = sock.recvfrom(2048)
                 ack_packet = Packet.unpack(data)
 
-                if ack_packet and ack_packet.type == 2:
-                    ack_seqnum = ack_packet.seqnum
+                if ack_packet:
+                    # Prend en compte que les ACK et les SACK
+                    if ack_packet.type == 3 or ack_packet.type == 2:
+                        ack_seqnum = ack_packet.seqnum
 
-                    base_cycle = (last_ack + 1) // 2048
-                    current_idx = (base_cycle * 2048) + ack_seqnum - 1
+                        base_cycle = (last_ack + 1) // 2048
+                        current_idx = (base_cycle * 2048) + ack_seqnum - 1
 
-                    if current_idx <= last_ack:
-                        current_idx += 2048
+                        if current_idx <= last_ack:
+                            current_idx += 2048
 
-                    if current_idx > last_ack and current_idx < len(packets):
-                        last_ack = current_idx
-                        print(f"ACK recu : fenetre avance a l'idx {last_ack}", file=sys.stderr)
+                        if current_idx > last_ack and current_idx < len(packets):
+                            last_ack = current_idx
+                            print(f"ACK recu : fenetre avance a l'idx {last_ack}", file=sys.stderr)
 
             except socket.timeout:
                 pass

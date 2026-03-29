@@ -18,7 +18,16 @@ class FakeSocket:
         self.sent.append((data, addr))
 
     def recvfrom(self, n):
+        if not self.rep:
+            # Simule une attente infinie ou une fin de flux
+            raise socket.timeout
         return self.rep.pop(0)
+
+    def settimeout(self, t):
+        pass
+
+    def close(self):
+        pass
 
 #créer un paquet data
 def make_data(seq, txt):
@@ -76,3 +85,63 @@ def test_client_url_invalide():
     with pytest.raises(SystemExit):
         client.start_client()
     sys.argv = old
+
+
+def test_client_desordre():
+    """
+    Vérifie que le client gère les paquets arrivant dans le désordre.
+    On envoie le segment 1 avant le segment 0.
+    """
+    addr = ("::1", 8000)
+    rep = [
+        (make_data(1, " world"), addr),
+        (make_data(0, "hello"), addr),
+        (make_fin(2), addr),
+    ]
+
+    fake = FakeSocket(rep)
+    old_socket = client.socket.socket
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        f_name = tmp.name
+
+    try:
+        client.socket.socket = lambda *a: fake
+        sys.argv = ["client.py", "http://localhost:8000/order.txt", "--save", f_name]
+        client.start_client()
+
+        with open(f_name, "rb") as f:
+            assert f.read() == b"hello world"
+    finally:
+        client.socket.socket = old_socket
+        if os.path.exists(f_name):
+            os.remove(f_name)
+
+
+def test_client_doublon():
+    """Vérifie que le client ignore les paquets déjà reçus."""
+    addr = ("::1", 8000)
+    # On envoie le Seq 0 deux fois
+    rep = [
+        (make_data(0, "unique"), addr),
+        (make_data(0, "unique"), addr),
+        (make_fin(1), addr),
+    ]
+
+    fake = FakeSocket(rep)
+    old_socket = client.socket.socket
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        f_name = tmp.name
+
+    try:
+        client.socket.socket = lambda *a: fake
+        sys.argv = ["client.py", "http://localhost:8000/dup.txt", "--save", f_name]
+        client.start_client()
+
+        with open(f_name, "rb") as f:
+            assert f.read() == b"unique"
+    finally:
+        client.socket.socket = old_socket
+        if os.path.exists(f_name):
+            os.remove(f_name)
